@@ -2,9 +2,7 @@
 
 A custom 12-degree-of-freedom quadruped robot built around hobby servos and a Raspberry Pi Pico.
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/b1dc6760-4037-48ae-9d39-96bc865864ea" alt="Quadruped Robot" width="900" />
-</p>
+<img width="900" alt="image" src="https://github.com/user-attachments/assets/b1dc6760-4037-48ae-9d39-96bc875864ea" />
 
 ## Overview
 
