@@ -105,7 +105,3 @@ Potential next steps for the project include:
 - expanding remote control and autonomous behaviors
 - investigating more robust mechanical and electrical redesigns
 - upgrading to brushless motors for greater precision and torque
-
-## License
-
-This project is for personal and educational use.
