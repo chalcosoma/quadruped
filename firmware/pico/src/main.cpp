@@ -63,6 +63,24 @@ static const QuadrupedConfig ROBOT_CONF = {
     .bodyWidth = 12.0f,
 };
 
+static void reply(const char* msg) {
+  printf("%s", msg);
+  uart_puts(UART_ID, msg);
+}
+
+using Handler = void (*)(Quadruped&);
+
+struct Command {
+  const char* name;
+  Handler run;
+};
+
+static void setLegs(Quadruped& r, bool on) {
+  Leg* legs[] = {&r.rearLeftLeg(), &r.rearRightLeg(), &r.frontLeftLeg(),
+                 &r.frontRightLeg()};
+  for (auto* leg : legs) on ? leg->enable() : leg->disable();
+}
+
 static void readline(char* buf, size_t maxlen) {
   size_t n = 0;
   while (n < maxlen - 1) {
@@ -72,6 +90,68 @@ static void readline(char* buf, size_t maxlen) {
   }
   while (n > 0 && (buf[n - 1] == '\r' || buf[n - 1] == ' ')) --n;
   buf[n] = '\0';
+}
+
+static const Command COMMANDS[] = {
+    {"home",
+     [](Quadruped& r) {
+       r.home();
+       reply("Homed.\n");
+     }},
+    {"stand",
+     [](Quadruped& r) {
+       r.stand();
+       reply("Standing.\n");
+     }},
+    {"walk",
+     [](Quadruped& r) {
+       reply("Walking...\n");
+       r.trot(10);
+       reply("Done.\n");
+     }},
+    {"up",
+     [](Quadruped& r) {
+       r.setStance(15.0f, 0.0f, 0.0f);
+       reply("Looking up.\n");
+     }},
+    {"down",
+     [](Quadruped& r) {
+       r.setStance(-15.0f, 0.0f, 0.0f);
+       reply("Looking down.\n");
+     }},
+    {"right",
+     [](Quadruped& r) {
+       r.setStance(0.0f, 15.0f, 0.0f);
+       reply("Tilting right.\n");
+     }},
+    {"crouch",
+     [](Quadruped& r) {
+       r.setStance(0.0f, 0.0f, -5.0f);
+       reply("Crouching.\n");
+     }},
+    {"off",
+     [](Quadruped& r) {
+       setLegs(r, false);
+       reply("Powered off.\n");
+     }},
+    {"on",
+     [](Quadruped& r) {
+       setLegs(r, true);
+       reply("Powered on.\n");
+     }},
+};
+
+static void dispatch(Quadruped& robot, const char* cmd) {
+  for (const auto& c : COMMANDS) {
+    if (strcmp(cmd, c.name) == 0) {
+      c.run(robot);
+      return;
+    }
+  }
+  reply("Unknown command: ");
+  reply(cmd);
+  reply("\n");
+  printCommandList();
 }
 
 int main() {
@@ -87,7 +167,7 @@ int main() {
 
   uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
 
-  printf("UART READY");
+  printf("UART READY\n");
 
   static Quadruped robot(ROBOT_CONF);
 
@@ -99,110 +179,21 @@ int main() {
   char bt_cmd[64];
   size_t bt_index = 0;
 
-  printf("Ready.\n");
-  printf(
-      "Commands: home | stand | walk | look_up | look_down | tilt_right | "
-      "crouch\n\n");
+  reply("Ready.\n");
+  printCommandList();
 
-  uart_puts(UART_ID, "Ready.\n");
-  uart_puts(UART_ID,
-            "Commands: home | stand | crouch | walk | up | "
-            "down | right | off | on\n");
   while (true) {
-    if (uart_is_readable(UART_ID)) {
-      char c = uart_getc(UART_ID);
+    if (!uart_is_readable(UART_ID)) continue;
 
-      if (c == '\r') continue;
-      if (c == '\n') {
-        bt_cmd[bt_index] = '\0';
+    const char c = uart_getc(UART_ID);
+    if (c == '\r') continue;
 
-        if (strcmp(bt_cmd, "home") == 0) {
-          robot.home();
-          printf("Homed.\n");
-          uart_puts(UART_ID, "Homed.\n");
-        } else if (strcmp(bt_cmd, "stand") == 0) {
-          robot.stand();
-          printf("Standing.\n");
-          uart_puts(UART_ID, "Standing.\n");
-
-        } else if (strcmp(bt_cmd, "walk") == 0) {
-          printf("Walking...\n");
-          uart_puts(UART_ID, "Walking...\n");
-
-          robot.trot(10);
-          printf("Done.\n");
-          uart_puts(UART_ID, "Done.\n");
-
-        } else if (strcmp(bt_cmd, "up") == 0) {
-          robot.setStance(15.0f, 0.0f, 0.0f);
-          printf("Looking up.\n");
-          uart_puts(UART_ID, "Looking up.\n");
-
-        } else if (strcmp(bt_cmd, "down") == 0) {
-          robot.setStance(-15.0f, 0.0f, 0.0f);
-          printf("Looking down.\n");
-          uart_puts(UART_ID, "Looking down.\n");
-
-        } else if (strcmp(bt_cmd, "right") == 0) {
-          robot.setStance(0.0f, 15.0f, 0.0f);
-          printf("Tilting right.\n");
-          uart_puts(UART_ID, "Tilting right.\n");
-
-        } else if (strcmp(bt_cmd, "crouch") == 0) {
-          robot.setStance(0.0f, 0.0f, -5.0f);
-          printf("Crouching.\n");
-          uart_puts(UART_ID, "Crouching.\n");
-
-        } else if (strcmp(bt_cmd, "off") == 0) {
-          robot.rearLeftLeg().disable();
-          robot.rearRightLeg().disable();
-          robot.frontLeftLeg().disable();
-          robot.frontRightLeg().disable();
-          printf("Powered off.\n");
-          uart_puts(UART_ID, "Powered off.\n");
-
-        }
-
-        else if (strcmp(bt_cmd, "on") == 0) {
-          robot.rearLeftLeg().enable();
-          robot.rearRightLeg().enable();
-          robot.frontLeftLeg().enable();
-          robot.frontRightLeg().enable();
-          printf("Powered on.\n");
-          uart_puts(UART_ID, "Powered on.\n");
-
-        }
-
-        // else if (strncmp(cmd, "angles ", 7) == 0) {
-        //   float c, f, t;
-        //   if (sscanf(cmd + 7, "%f,%f,%f", &c, &f, &t) == 3) {
-        //     robot.rearLeftLeg().testAngles(c, f, t);
-        //     printf("Set coxa=%.2f femur=%.2f tibia=%.2f\n", c, f, t);
-        //   } else {
-        //     printf("Usage: angles <coxa>,<femur>,<tibia>\n");
-        //   }
-        // }
-
-        else if (bt_index > 0) {
-          // only print if sent something unrecognized
-          printf("Unknown BT command: %s\n", bt_cmd);
-          printf(
-              "Commands: home | stand | crouch | walk | up | "
-              "down | right | off | on\n");
-
-          uart_puts(UART_ID, "Unknown BT command: ");
-          uart_puts(UART_ID, bt_cmd);
-          uart_putc(UART_ID, '\n');
-          uart_puts(UART_ID,
-                    "Commands: home | stand | crouch | walk | up | "
-                    "down | right | off | on\n");
-        }
-
-        bt_index = 0;
-
-      } else if (bt_index < sizeof(bt_cmd) - 1) {
-        bt_cmd[bt_index++] = c;
-      }
+    if (c == '\n') {
+      bt_cmd[bt_index] = '\0';
+      if (bt_index > 0) dispatch(robot, bt_cmd);
+      bt_index = 0;
+    } else if (bt_index < sizeof(bt_cmd) - 1) {
+      bt_cmd[bt_index++] = c;
     }
   }
 }
